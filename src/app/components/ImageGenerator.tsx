@@ -2,41 +2,48 @@
 
 import { useState } from "react";
 
-export default function Home() {
+interface ImageGeneratorProps {
+  generateImage: (
+    text: string
+  ) => Promise<{ success: boolean; imageUrl?: string; error?: string }>;
+}
+
+export default function ImageGenerator({ generateImage }: ImageGeneratorProps) {
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setImageUrl(null);
+    setError(null);
 
     try {
-      const response = await fetch("/api/generate-image", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text: inputText }),
-      });
+      const result = await generateImage(inputText);
 
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error || "Failed to generate image");
+      if (!result.success) {
+        throw new Error(result.error || "Failed to generate image");
       }
 
-      if (data.imageUrl) {
+      if (result.imageUrl) {
         const img = new Image();
+        const url = result.imageUrl;
         img.onload = () => {
-          setImageUrl(data.imageUrl);
+          setImageUrl(url);
         };
-        img.src = data.imageUrl;
+        img.src = url;
+      } else {
+        throw new Error("No image URL received");
       }
 
       setInputText("");
     } catch (error) {
       console.error("Error:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to generate image"
+      );
     } finally {
       setIsLoading(false);
     }
@@ -46,8 +53,12 @@ export default function Home() {
     // TODO: Update the UI here to show the images generated
 
     <div className="min-h-screen flex flex-col justify-between p-8">
-      <main className="flex-1">
-        {/* Main content can go here */}
+      <main className="flex-1 flex flex-col items-center gap-8">
+        {error && (
+          <div className="w-full max-w-2xl p-4 bg-red-50 border border-red-200 rounded-lg overflow-hidden shadow-lg">
+            {error}
+          </div>
+        )}
 
         {imageUrl && (
           <div className="w-full max-w-2xl rounded-lg overflow-hidden shadow-lg">
@@ -55,6 +66,15 @@ export default function Home() {
               src={imageUrl}
               alt="Generated artwork"
               className="w-full h-auto"
+            />
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="w-full max-w-2xl flex items-center justify-center">
+            <div
+              className="w-12 h-12 border-4 border-gray-300 border-t-black dark:border-gray"
+              style={{ animation: "spin is linear infinite" }}
             />
           </div>
         )}
@@ -73,7 +93,7 @@ export default function Home() {
             />
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !inputText.trim()}
               className="px-6 py-3 rounded-lg bg-foreground text-background hover:bg-[#383838] dark:hover:bg-[#ccc] transition-colors disabled:opacity-50"
             >
               {isLoading ? "Generating..." : "Generate"}
